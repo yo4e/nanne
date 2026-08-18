@@ -129,6 +129,7 @@ URLを相手に渡す
 - [公開前法務・運用レビュー](./docs/LEGAL_REVIEW.md)
 - [ネーミングレビュー](./docs/NAMING_REVIEW.md)
 - [埋め込み提供形態の法務レビュー](./docs/EMBEDDING_LEGAL_REVIEW.md)
+- [電気通信事業の届出条件・公開スケジュール](./docs/TELECOM_FILING_SCHEDULE.md)
 
 法令や手続は変更されることがあります。実際の公開時には必ず最新の総務省・e-Gov情報を確認し、迷う場合は管轄の総合通信局等へ相談してください。
 
