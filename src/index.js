@@ -46,6 +46,15 @@ export default {
       return json({ id, path: `/r/${id}` }, 201);
     }
 
+    const statusMatch = url.pathname.match(/^\/api\/rooms\/([a-f0-9]{32})\/status$/);
+    if (statusMatch && request.method === "GET") {
+      const roomId = statusMatch[1];
+      if (!isValidRoomId(roomId)) {
+        return json({ error: "invalid_room" }, 400);
+      }
+      return env.ROOMS.getByName(roomId).fetch("https://room.internal/status");
+    }
+
     const roomMatch = url.pathname.match(/^\/api\/rooms\/([a-f0-9]{32})\/ws$/);
     if (roomMatch && request.method === "GET") {
       const roomId = roomMatch[1];
@@ -91,6 +100,23 @@ export class Room extends DurableObject {
       return new Response(null, { status: 204 });
     }
 
+    if (url.pathname === "/status" && request.method === "GET") {
+      const status = await this.ctx.storage.get("status");
+      const expiresAt = await this.ctx.storage.get("expiresAt");
+
+      if (status === "active" && typeof expiresAt === "number") {
+        if (Date.now() >= expiresAt) {
+          await this.expire(expiresAt);
+          return json({ status: "expired", expiresAt }, 410);
+        }
+        return json({ status: "active", expiresAt });
+      }
+      if (status === "expired") {
+        return json({ status: "expired", expiresAt: expiresAt ?? null }, 410);
+      }
+      return json({ status: "missing" }, 404);
+    }
+
     if (request.headers.get("Upgrade") !== "websocket") {
       return new Response("WebSocket required", { status: 426 });
     }
@@ -132,9 +158,6 @@ export class Room extends DurableObject {
     const expiresAt = await this.ctx.storage.get("expiresAt");
     if (typeof expiresAt !== "number" || Date.now() >= expiresAt) {
       await this.expire(typeof expiresAt === "number" ? expiresAt : Date.now());
-      try {
-        ws.close(4000, "Room expired");
-      } catch {}
       return;
     }
 
