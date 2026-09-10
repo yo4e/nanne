@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="URLひとつで始める、極小の一時チャット nanne" />
+    <title>nanne — なんね？</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <section id="landing" class="panel landing" aria-labelledby="landing-title">
+        <p class="eyebrow">nanne</p>
+        <h1 id="landing-title">なんね？</h1>
+        <p class="lead">URLをひとつ渡して、少しだけ話すための仮設小屋。</p>
+        <p class="note">アカウントなし。公開一覧なし。会話は24時間で消えます。</p>
+        <button id="create-room" class="primary" type="button">部屋を作る</button>
+        <p id="create-error" class="error" role="alert" hidden></p>
+      </section>
+
+      <section id="room" class="panel room" aria-labelledby="room-title" hidden>
+        <header class="room-header">
+          <div>
+            <p class="eyebrow">nanne</p>
+            <h1 id="room-title">なんね？</h1>
+          </div>
+          <span id="status" class="status">接続しています…</span>
+        </header>
+
+        <div class="invite">
+          <label for="invite-url">このURLを相手に渡す</label>
+          <div class="invite-row">
+            <input id="invite-url" type="text" readonly />
+            <button id="copy-url" type="button">コピー</button>
+          </div>
+          <p id="expires" class="small"></p>
+        </div>
+
+        <div id="messages" class="messages" aria-live="polite" aria-label="メッセージ"></div>
+
+        <form id="composer" class="composer">
+          <label class="sr-only" for="message-input">メッセージ</label>
+          <textarea
+            id="message-input"
+            rows="2"
+            maxlength="1000"
+            placeholder="なんね？"
+            autocomplete="off"
+          ></textarea>
+          <div class="composer-bottom">
+            <span id="counter" class="small">0 / 1000</span>
+            <button id="send" class="primary" type="submit">送る</button>
+          </div>
+        </form>
+
+        <p id="room-error" class="error" role="alert" hidden></p>
+        <p class="footer-note">履歴はこの部屋だけに保存され、24時間で削除されます。</p>
+      </section>
+
+      <section id="not-found" class="panel" hidden>
+        <p class="eyebrow">nanne</p>
+        <h1>ここには部屋がないみたい。</h1>
+        <p class="lead">新しい部屋を作って、そこから話そう。</p>
+        <a class="button-link primary" href="/">トップへ戻る</a>
+      </section>
+    </main>
+  </body>
+</html>
