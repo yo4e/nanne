@@ -102,11 +102,57 @@ function websocketUrl(roomId) {
   return `${protocol}//${location.host}/api/rooms/${roomId}/ws`;
 }
 
-function connect(roomId) {
+function scheduleReconnect(roomId) {
+  clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(() => connect(roomId), 1500);
+}
+
+async function checkRoom(roomId) {
+  const response = await fetch(`/api/rooms/${roomId}/status`, {
+    headers: { accept: "application/json" },
+    cache: "no-store",
+  });
+  const data = await response.json().catch(() => ({}));
+  return { response, data };
+}
+
+async function connect(roomId) {
   clearTimeout(reconnectTimer);
   intentionallyClosed = false;
-  setConnectionState(socket ? "retrying" : "connecting");
+  setConnectionState("connecting");
   setError(roomError);
+
+  try {
+    const { response, data } = await checkRoom(roomId);
+    if (response.status === 410) {
+      intentionallyClosed = true;
+      expiresAt = data.expiresAt ?? null;
+      updateExpiry();
+      setConnectionState("expired");
+      setError(roomError, "この部屋は消えました。新しい部屋を作ってください。");
+      return;
+    }
+    if (response.status === 404) {
+      intentionallyClosed = true;
+      setConnectionState("closed");
+      setError(roomError, "この部屋は見つかりませんでした。URLを確認してください。");
+      return;
+    }
+    if (!response.ok || data.status !== "active") {
+      throw new Error("room status failed");
+    }
+    expiresAt = data.expiresAt;
+    updateExpiry();
+  } catch {
+    if (document.visibilityState === "hidden") {
+      setConnectionState("closed");
+      return;
+    }
+    setConnectionState("retrying");
+    setError(roomError, "接続がうまくいっていません。再接続を試します。");
+    scheduleReconnect(roomId);
+    return;
+  }
 
   const ws = new WebSocket(websocketUrl(roomId));
   socket = ws;
@@ -162,7 +208,7 @@ function connect(roomId) {
     }
 
     setConnectionState("retrying");
-    reconnectTimer = setTimeout(() => connect(roomId), 1500);
+    scheduleReconnect(roomId);
   });
 
   ws.addEventListener("error", () => {
@@ -242,6 +288,17 @@ if (location.pathname === "/" || location.pathname === "") {
   hide(roomView);
   show(notFound);
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (
+    document.visibilityState === "visible" &&
+    roomMatch &&
+    !socket &&
+    !intentionallyClosed
+  ) {
+    connect(roomMatch[1]);
+  }
+});
 
 addEventListener("beforeunload", () => {
   intentionallyClosed = true;
