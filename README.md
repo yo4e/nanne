@@ -145,6 +145,53 @@ URLを相手に渡す
 - ログやアクセス情報をどこまで保持するか
 - 利用するインフラや外部サービスの規約・データ取扱い
 
+## v1 implementation
+
+Issue #6 で、READMEに書いていた最小体験を実装しています。
+
+```text
+部屋を作る → URLを渡す → 入る → 話す → 24時間で消える
+```
+
+現在の実装は Cloudflare Workers + Durable Objects を使います。フロントエンドはフレームワークを使わない静的HTML / CSS / JavaScriptです。
+
+v1では次を固定しています。
+
+- ルームURLは推測困難なランダムID
+- ルーム寿命は作成から24時間
+- 1ルーム最大8接続
+- 1メッセージ最大1000文字
+- 保存する履歴は最新100件まで
+- メッセージ本文はHTMLとして解釈しない
+- 期限時にメッセージ履歴を削除し、期限切れ状態だけを残す
+
+### Local development
+
+Node.js 22以降を用意して、次を実行します。
+
+```bash
+npm install
+npm run dev
+```
+
+Wranglerが表示するローカルURLをブラウザで開き、「部屋を作る」からルームを作成します。同じルームURLを別タブまたは別ブラウザで開くと、リアルタイム送受信を確認できます。
+
+### Check
+
+```bash
+npm run check
+```
+
+Node.jsの単体テストと `wrangler deploy --dry-run` を実行します。
+
+### Deploy
+
+```bash
+npm run deploy
+```
+
+これはソフトウェアをCloudflareへデプロイするコマンドです。**nanne公式ホスト版を一般公開する判断とは別です。** 公式サービスとして本公開・継続提供・収益化等を行う場合は、`docs/JAPAN_TELECOM.md` と `docs/LEGAL_REVIEW.md` を再確認し、必要な法務・運用対応を公開前に行ってください。
+
 ## Development direction
 
 まずは一つのルームで人間同士が話せる最小形を作る。
