@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "test": "node --test",
+    "test": "node --test test/core.test.js",
+    "test:e2e": "node test/e2e.mjs",
     "check": "npm test && wrangler deploy --dry-run",
     "deploy": "wrangler deploy"
   },
