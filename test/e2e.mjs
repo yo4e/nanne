@@ -49,6 +49,12 @@ async function openClient(roomId) {
   return { ws, hello };
 }
 
+async function broadcastAndReceive(sender, receivers, text) {
+  const pending = receivers.map((client) => waitForType(client.ws, "message"));
+  sender.ws.send(JSON.stringify({ type: "message", text }));
+  return Promise.all(pending);
+}
+
 const landing = await fetch(`${HTTP_BASE}/`);
 assert.equal(landing.status, 200);
 assert.match(await landing.text(), /なんね？/);
@@ -79,17 +85,26 @@ assert.notEqual(clientA.hello.clientId, clientB.hello.clientId);
 assert.deepEqual(clientA.hello.messages, []);
 assert.deepEqual(clientB.hello.messages, []);
 
-const receivedByA = waitForType(clientA.ws, "message");
-const receivedByB = waitForType(clientB.ws, "message");
-clientA.ws.send(JSON.stringify({ type: "message", text: "なんね？" }));
+const firstDelivery = await broadcastAndReceive(clientA, [clientA, clientB], "なんね？");
+assert.equal(firstDelivery[0].message.text, "なんね？");
+assert.equal(firstDelivery[1].message.text, "なんね？");
+assert.equal(firstDelivery[0].message.id, firstDelivery[1].message.id);
+assert.equal(firstDelivery[0].message.senderId, clientA.hello.clientId);
 
-const [messageA, messageB] = await Promise.all([receivedByA, receivedByB]);
-assert.equal(messageA.message.text, "なんね？");
-assert.equal(messageB.message.text, "なんね？");
-assert.equal(messageA.message.id, messageB.message.id);
-assert.equal(messageA.message.senderId, clientA.hello.clientId);
+const secondDelivery = await broadcastAndReceive(clientB, [clientA, clientB], "どうしたん？");
+assert.equal(secondDelivery[0].message.text, "どうしたん？");
+assert.equal(secondDelivery[1].message.text, "どうしたん？");
+assert.equal(secondDelivery[0].message.id, secondDelivery[1].message.id);
+assert.equal(secondDelivery[0].message.senderId, clientB.hello.clientId);
+
+clientB.ws.close(1000, "reconnect test");
+const clientC = await openClient(room.id);
+assert.deepEqual(
+  clientC.hello.messages.map((message) => message.text),
+  ["なんね？", "どうしたん？"],
+);
 
 clientA.ws.close(1000, "test complete");
-clientB.ws.close(1000, "test complete");
+clientC.ws.close(1000, "test complete");
 
 console.log("Local Worker integration test passed");
