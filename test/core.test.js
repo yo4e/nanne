@@ -3,12 +3,17 @@ import assert from "node:assert/strict";
 import {
   MAX_HISTORY_MESSAGES,
   PARTICIPANT_NAME_STEMS,
+  ROOM_TTL_MS,
   isValidParticipantId,
   isValidRoomId,
   parseClientMessage,
   pickParticipantName,
   trimHistory,
 } from "../src/core.js";
+
+test("room lifetime is fixed at 24 hours from creation", () => {
+  assert.equal(ROOM_TTL_MS, 24 * 60 * 60 * 1000);
+});
 
 test("room id accepts only 32 lowercase hex characters", () => {
   assert.equal(isValidRoomId("0123456789abcdef0123456789abcdef"), true);
