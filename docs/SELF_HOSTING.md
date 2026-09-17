@@ -160,3 +160,10 @@ Each self-hosting operator is responsible for their own deployment, users, data 
 Cloudflare Workers is the reference deployment for v1, not the definition of the `nanne` concept itself.
 
 Future versions may separate the chat protocol/core from the Cloudflare-specific backend so that other hosting environments can implement the same small temporary-chat model. That portability work is intentionally outside the v1 self-hosting guide.
+
+
+## Cloudflare references
+
+- [Workers Builds: Git integration](https://developers.cloudflare.com/workers/ci-cd/builds/git-integration/)
+- [Workers Builds: GitHub integration](https://developers.cloudflare.com/workers/ci-cd/builds/git-integration/github-integration/)
+- [Durable Objects: Getting started](https://developers.cloudflare.com/durable-objects/get-started/)
