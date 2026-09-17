@@ -166,6 +166,18 @@ v1では次を固定しています。
 - メッセージ本文はHTMLとして解釈しない
 - 期限時にメッセージ履歴を削除し、期限切れ状態だけを残す
 
+### Self-hosting
+
+v1の参照デプロイ先は Cloudflare Workers です。
+
+いちばん簡単な方法は、このリポジトリをforkし、Cloudflare Dashboardの **Workers & Pages → Create application → Import a repository** からforkを接続する方法です。production branchを `main` にすると、その後は `main` へのpushに合わせて自動build / deployできます。
+
+既存の `wrangler.jsonc` に Static Assets と Durable Objects の設定が入っているため、通常はCloudflare側でDurable Objectを手作業で作る必要はありません。
+
+詳しい手順、Worker名、`workers.dev` URL、更新方法、公開運用時の注意は以下にまとめています。
+
+→ **[Cloudflare Workersでセルフホストする](./docs/SELF_HOSTING.md)**
+
 ### Local development
 
 Node.js 22以降を用意して、次を実行します。
@@ -185,13 +197,17 @@ npm run check
 
 Node.jsの単体テストと `wrangler deploy --dry-run` を実行します。
 
-### Deploy
+### Manual deploy
+
+CloudflareのGit連携を使わず、Wranglerから手動デプロイする場合は次を実行します。
 
 ```bash
 npm run deploy
 ```
 
-これはソフトウェアをCloudflareへデプロイするコマンドです。**nanne公式ホスト版を一般公開する判断とは別です。** 公式サービスとして本公開・継続提供・収益化等を行う場合は、`docs/JAPAN_TELECOM.md` と `docs/LEGAL_REVIEW.md` を再確認し、必要な法務・運用対応を公開前に行ってください。
+これは開発・運用上の別手段です。通常のセルフホストではCloudflareのGit連携を推奨します。
+
+**OSSとしてデプロイすることと、nanne公式ホスト版を一般向けサービスとして本公開・収益化することは別です。** 公式サービス化、独自ドメイン、広告等は将来課題として扱い、その段階で `docs/JAPAN_TELECOM.md` と `docs/LEGAL_REVIEW.md` を再確認します。
 
 ## Development direction
 
