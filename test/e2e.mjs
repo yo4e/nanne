@@ -41,8 +41,10 @@ function waitForType(ws, type, timeoutMs = 5000) {
   });
 }
 
-async function openClient(roomId) {
-  const ws = new WebSocket(`${WS_BASE}/api/rooms/${roomId}/ws`);
+async function openClient(roomId, participantId) {
+  const url = new URL(`${WS_BASE}/api/rooms/${roomId}/ws`);
+  url.searchParams.set("participant", participantId);
+  const ws = new WebSocket(url);
   const helloPromise = waitForType(ws, "hello");
   await waitForOpen(ws);
   const hello = await helloPromise;
@@ -59,6 +61,7 @@ const landing = await fetch(`${HTTP_BASE}/`);
 assert.equal(landing.status, 200);
 assert.match(await landing.text(), /なんね？/);
 
+const createdAfter = Date.now();
 const createResponse = await fetch(`${HTTP_BASE}/api/rooms`, { method: "POST" });
 assert.equal(createResponse.status, 201);
 const room = await createResponse.json();
@@ -75,13 +78,23 @@ const status = await statusResponse.json();
 assert.equal(status.status, "active");
 assert.equal(typeof status.expiresAt, "number");
 assert.ok(status.expiresAt > Date.now());
+assert.ok(status.expiresAt <= createdAfter + (24 * 60 * 60 * 1000) + 5000);
 
 const missingResponse = await fetch(`${HTTP_BASE}/api/rooms/${"f".repeat(32)}/status`);
 assert.equal(missingResponse.status, 404);
 
-const clientA = await openClient(room.id);
-const clientB = await openClient(room.id);
-assert.notEqual(clientA.hello.clientId, clientB.hello.clientId);
+const participantA = "a".repeat(32);
+const participantB = "b".repeat(32);
+const clientA = await openClient(room.id, participantA);
+const clientB = await openClient(room.id, participantB);
+
+assert.equal(clientA.hello.participantId, participantA);
+assert.equal(clientB.hello.participantId, participantB);
+assert.equal(clientA.hello.clientId, participantA);
+assert.equal(clientB.hello.clientId, participantB);
+assert.match(clientA.hello.participantName, /さん$/);
+assert.match(clientB.hello.participantName, /さん$/);
+assert.notEqual(clientA.hello.participantName, clientB.hello.participantName);
 assert.deepEqual(clientA.hello.messages, []);
 assert.deepEqual(clientB.hello.messages, []);
 
@@ -89,22 +102,30 @@ const firstDelivery = await broadcastAndReceive(clientA, [clientA, clientB], "�
 assert.equal(firstDelivery[0].message.text, "なんね？");
 assert.equal(firstDelivery[1].message.text, "なんね？");
 assert.equal(firstDelivery[0].message.id, firstDelivery[1].message.id);
-assert.equal(firstDelivery[0].message.senderId, clientA.hello.clientId);
+assert.equal(firstDelivery[0].message.senderId, participantA);
+assert.equal(firstDelivery[0].message.senderName, clientA.hello.participantName);
 
 const secondDelivery = await broadcastAndReceive(clientB, [clientA, clientB], "どうしたん？");
 assert.equal(secondDelivery[0].message.text, "どうしたん？");
 assert.equal(secondDelivery[1].message.text, "どうしたん？");
 assert.equal(secondDelivery[0].message.id, secondDelivery[1].message.id);
-assert.equal(secondDelivery[0].message.senderId, clientB.hello.clientId);
+assert.equal(secondDelivery[0].message.senderId, participantB);
+assert.equal(secondDelivery[0].message.senderName, clientB.hello.participantName);
 
 clientB.ws.close(1000, "reconnect test");
-const clientC = await openClient(room.id);
+const reconnectedB = await openClient(room.id, participantB);
+assert.equal(reconnectedB.hello.participantId, participantB);
+assert.equal(reconnectedB.hello.participantName, clientB.hello.participantName);
 assert.deepEqual(
-  clientC.hello.messages.map((message) => message.text),
+  reconnectedB.hello.messages.map((message) => message.text),
   ["なんね？", "どうしたん？"],
+);
+assert.deepEqual(
+  reconnectedB.hello.messages.map((message) => message.senderName),
+  [clientA.hello.participantName, clientB.hello.participantName],
 );
 
 clientA.ws.close(1000, "test complete");
-clientC.ws.close(1000, "test complete");
+reconnectedB.ws.close(1000, "test complete");
 
 console.log("Local Worker integration test passed");

@@ -3,8 +3,10 @@ import {
   MAX_CONNECTIONS,
   MIN_MESSAGE_INTERVAL_MS,
   ROOM_TTL_MS,
+  isValidParticipantId,
   isValidRoomId,
   parseClientMessage,
+  pickParticipantName,
   trimHistory,
 } from "./core.js";
 
@@ -95,6 +97,7 @@ export class Room extends DurableObject {
         createdAt,
         expiresAt,
         messages: [],
+        participants: {},
       });
       await this.ctx.storage.setAlarm(expiresAt);
       return new Response(null, { status: 204 });
@@ -134,18 +137,37 @@ export class Room extends DurableObject {
       return new Response("Room is full", { status: 429 });
     }
 
+    const requestedParticipantId = url.searchParams.get("participant");
+    const participantId = isValidParticipantId(requestedParticipantId)
+      ? requestedParticipantId
+      : crypto.randomUUID().replaceAll("-", "");
+
+    const participants = (await this.ctx.storage.get("participants")) ?? {};
+    let participantName = participants[participantId];
+
+    if (!participantName) {
+      participantName = pickParticipantName(Object.values(participants));
+      participants[participantId] = participantName;
+      await this.ctx.storage.put("participants", participants);
+    }
+
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    const clientId = crypto.randomUUID();
 
-    server.serializeAttachment({ clientId, lastSentAt: 0 });
+    server.serializeAttachment({
+      participantId,
+      participantName,
+      lastSentAt: 0,
+    });
     this.ctx.acceptWebSocket(server);
 
     const messages = (await this.ctx.storage.get("messages")) ?? [];
     server.send(
       JSON.stringify({
         type: "hello",
-        clientId,
+        clientId: participantId,
+        participantId,
+        participantName,
         expiresAt,
         messages,
       }),
@@ -162,7 +184,8 @@ export class Room extends DurableObject {
     }
 
     const attachment = ws.deserializeAttachment() ?? {
-      clientId: crypto.randomUUID(),
+      participantId: crypto.randomUUID().replaceAll("-", ""),
+      participantName: "だれか",
       lastSentAt: 0,
     };
     const now = Date.now();
@@ -183,7 +206,8 @@ export class Room extends DurableObject {
 
     const message = {
       id: crypto.randomUUID(),
-      senderId: attachment.clientId,
+      senderId: attachment.participantId,
+      senderName: attachment.participantName,
       text: parsed.text,
       sentAt: now,
     };

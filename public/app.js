@@ -15,9 +15,12 @@ const sendButton = document.querySelector("#send");
 const roomError = document.querySelector("#room-error");
 
 const ROOM_RE = /^\/r\/([a-f0-9]{32})\/?$/;
+const PARTICIPANT_ID_RE = /^[a-f0-9]{32}$/;
 const roomMatch = location.pathname.match(ROOM_RE);
+const transientParticipantIds = new Map();
 let socket = null;
-let clientId = null;
+let participantId = null;
+let participantName = null;
 let expiresAt = null;
 let reconnectTimer = null;
 let intentionallyClosed = false;
@@ -35,6 +38,38 @@ function setError(element, message = "") {
   element.hidden = !message;
 }
 
+function participantStorageKey(roomId) {
+  return `nanne:participant:${roomId}`;
+}
+
+function getOrCreateParticipantId(roomId) {
+  const transient = transientParticipantIds.get(roomId);
+  if (transient) return transient;
+
+  const key = participantStorageKey(roomId);
+  try {
+    const stored = localStorage.getItem(key);
+    if (PARTICIPANT_ID_RE.test(stored ?? "")) {
+      transientParticipantIds.set(roomId, stored);
+      return stored;
+    }
+  } catch {}
+
+  const created = crypto.randomUUID().replaceAll("-", "");
+  transientParticipantIds.set(roomId, created);
+  try {
+    localStorage.setItem(key, created);
+  } catch {}
+  return created;
+}
+
+function forgetParticipantId(roomId) {
+  transientParticipantIds.delete(roomId);
+  try {
+    localStorage.removeItem(participantStorageKey(roomId));
+  } catch {}
+}
+
 function formatTime(timestamp) {
   return new Intl.DateTimeFormat("ja-JP", {
     hour: "2-digit",
@@ -45,13 +80,16 @@ function formatTime(timestamp) {
 function appendMessage(message) {
   if (!message || typeof message.text !== "string") return;
 
+  const own = message.senderId === participantId;
+  const name = message.senderName || (own ? participantName : null) || "だれか";
+
   const item = document.createElement("article");
   item.className = "message";
-  if (message.senderId === clientId) item.classList.add("own");
+  if (own) item.classList.add("own");
 
   const meta = document.createElement("div");
   meta.className = "message-meta";
-  meta.textContent = `${message.senderId === clientId ? "あなた" : "だれか"} · ${formatTime(message.sentAt)}`;
+  meta.textContent = `${name}${own ? "（あなた）" : ""} · ${formatTime(message.sentAt)}`;
 
   const body = document.createElement("p");
   body.className = "message-body";
@@ -86,7 +124,7 @@ function setConnectionState(state) {
   statusEl.dataset.state = state;
   const labels = {
     connecting: "接続しています…",
-    open: "つながった",
+    open: participantName ? `つながった · あなたは${participantName}` : "つながった",
     retrying: "再接続しています…",
     closed: "切断しました",
     expired: "期限切れ",
@@ -97,9 +135,11 @@ function setConnectionState(state) {
   sendButton.disabled = !writable;
 }
 
-function websocketUrl(roomId) {
+function websocketUrl(roomId, currentParticipantId) {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${location.host}/api/rooms/${roomId}/ws`;
+  const url = new URL(`${protocol}//${location.host}/api/rooms/${roomId}/ws`);
+  url.searchParams.set("participant", currentParticipantId);
+  return url.toString();
 }
 
 function scheduleReconnect(roomId) {
@@ -127,6 +167,7 @@ async function connect(roomId) {
     if (response.status === 410) {
       intentionallyClosed = true;
       expiresAt = data.expiresAt ?? null;
+      forgetParticipantId(roomId);
       updateExpiry();
       setConnectionState("expired");
       setError(roomError, "この部屋は消えました。新しい部屋を作ってください。");
@@ -134,6 +175,7 @@ async function connect(roomId) {
     }
     if (response.status === 404) {
       intentionallyClosed = true;
+      forgetParticipantId(roomId);
       setConnectionState("closed");
       setError(roomError, "この部屋は見つかりませんでした。URLを確認してください。");
       return;
@@ -154,7 +196,8 @@ async function connect(roomId) {
     return;
   }
 
-  const ws = new WebSocket(websocketUrl(roomId));
+  participantId = getOrCreateParticipantId(roomId);
+  const ws = new WebSocket(websocketUrl(roomId, participantId));
   socket = ws;
 
   ws.addEventListener("open", () => {
@@ -170,10 +213,11 @@ async function connect(roomId) {
     }
 
     if (payload.type === "hello") {
-      clientId = payload.clientId;
-      expiresAt = payload.expiresAt;
+      participantId = payload.participantId ?? payload.clientId ?? participantId;
+      participantName = payload.participantName ?? participantName;
       renderHistory(payload.messages);
       updateExpiry();
+      setConnectionState("open");
       return;
     }
 
@@ -197,6 +241,7 @@ async function connect(roomId) {
 
     if (event.code === 4000) {
       intentionallyClosed = true;
+      forgetParticipantId(roomId);
       setConnectionState("expired");
       setError(roomError, "この部屋は消えました。新しい部屋を作ってください。");
       return;
